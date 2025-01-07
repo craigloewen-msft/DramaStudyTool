@@ -1,8 +1,18 @@
 use leptos::{prelude::*, task::spawn_local};
 
+use crate::context::DramaStudyToolAppContext;
+
 #[server]
 pub async fn add_todo(title: String) -> Result<(), ServerFnError> {
-    leptos::logging::log!("Called it with value: {}", title);
+    let my_context = use_context::<DramaStudyToolAppContext>();
+    
+    if let Some(context) = my_context {
+        leptos::logging::log!("Context api string in server function: {:?}", context);
+    }else {
+        leptos::logging::log!("No context api string in server");
+    }
+
+    leptos::logging::log!("Called it with value: {}?", title);
     Ok(())
 }
 
