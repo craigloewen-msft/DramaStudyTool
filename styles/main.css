@@ -1,0 +1,10 @@
+.translation-output-box {
+    padding: 5px;
+    text-align: center;
+    background-color: #1d2f47;
+    border-radius: 10px; /* Rounds the corners */
+}
+
+.translation-output-label {
+    margin-bottom: 8px;
+}
