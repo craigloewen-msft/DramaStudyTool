@@ -1,5 +1,7 @@
 # Drama Study Tool
 
-Designed to help study language while watching a drama. For now only starting with Korean.
+This is a tool created to help study with dramas using their subtitles. 
 
-Work in progress.
+Right now it's focused only to K-Dramas but could expand in the future.
+
+Under construction...

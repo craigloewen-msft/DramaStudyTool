@@ -1,52 +1,58 @@
-// src/app.rs
-mod views;
 use leptos::prelude::*;
-use leptos_meta::*;
+use leptos_meta::{provide_meta_context, Link, MetaTags, Script, Stylesheet, Title};
 use leptos_router::{
-    components::{Route, Router, Routes},
-    hooks::use_location,
+    components::{Route, Router, Routes}, hooks::use_location,
     path,
 };
+
+mod views;
+
 use views::*;
 
-// Nav link for navbar
-#[component]
-fn NavLink(to: String, children: Children) -> impl IntoView {
-    let location = use_location();
-    let input_path = to;
-
+pub fn shell(options: LeptosOptions) -> impl IntoView {
     view! {
-        <ul class="nav nav-pills">
-            <li class="nav-item">
-                <a
-                    href=input_path.clone()
-                    class="nav-link"
-                    class:active=move || location.pathname.get() == input_path
-                    aria-current="page"
-                >
-                    {children()}
-                </a>
-            </li>
-        </ul>
+        <!DOCTYPE html>
+        <html lang="en" data-bs-theme="dark" >
+            <head>
+                <meta charset="utf-8"/>
+                <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                <AutoReload options=options.clone() />
+                <HydrationScripts options/>
+                <MetaTags/>
+                <Link
+                    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+                    rel="stylesheet"
+                    integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+                    crossorigin="anonymous"
+                />
+            </head>
+            <body>
+                <App/>
+            </body>
+            <Script
+                src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+                integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+                crossorigin="anonymous"
+            ></Script>
+        </html>
     }
 }
 
 #[component]
 pub fn App() -> impl IntoView {
+    // Provides context that manages stylesheets, titles, meta tags, etc.
     provide_meta_context();
+
     view! {
-        <Html {..} lang="en" data-bs-theme="dark" />
+        // injects a stylesheet into the document <head>
+        // id=leptos means cargo-leptos will hot-reload this stylesheet
+        <Stylesheet id="leptos" href="/pkg/dramastudytool.css"/>
+
+        // sets the document title
         <Title text="Drama Study Tool" />
-        <Meta charset="utf-8" />
-        <Meta name="viewport" content="width=device-width, initial-scale=1" />
-        <Link
-            href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
-            rel="stylesheet"
-            integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
-            crossorigin="anonymous"
-        />
-        <div>
-            <Router>
+
+        // content for this welcome page
+        <Router>
                 <nav>
                     <div class="container">
                         <header class="d-flex flex-wrap justify-content-center py-3 mb-4 border-bottom">
@@ -78,12 +84,40 @@ pub fn App() -> impl IntoView {
                     </div>
                 </main>
             </Router>
-        </div>
+    }
+}
 
-        <Script
-            src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
-            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
-            crossorigin="anonymous"
-        ></Script>
+/// Renders the home page of your application.
+#[component]
+fn HomePage() -> impl IntoView {
+    // Creates a reactive value to update the button
+    let count = RwSignal::new(0);
+    let on_click = move |_| *count.write() += 1;
+
+    view! {
+        <h1>"Welcome to Leptos!"</h1>
+        <button on:click=on_click>"Click Me: " {count}</button>
+    }
+}
+
+// Nav link for navbar
+#[component]
+fn NavLink(to: String, children: Children) -> impl IntoView {
+    let location = use_location();
+    let input_path = to;
+
+    view! {
+        <ul class="nav nav-pills">
+            <li class="nav-item">
+                <a
+                    href=input_path.clone()
+                    class="nav-link"
+                    class:active=move || location.pathname.get() == input_path
+                    aria-current="page"
+                >
+                    {children()}
+                </a>
+            </li>
+        </ul>
     }
 }

@@ -1,9 +1,10 @@
 use leptos::{prelude::*, task::spawn_local};
 
-// #[server]
-// pub async fn add_todo(title: String) -> Result<(), ServerFnError> {
-//     leptos::logging::log!("Called it with value: {}", title);
-// }
+#[server]
+pub async fn add_todo(title: String) -> Result<(), ServerFnError> {
+    leptos::logging::log!("Called it with value: {}", title);
+    Ok(())
+}
 
 #[component]
 pub fn Home() -> impl IntoView {
@@ -26,11 +27,11 @@ pub fn Home() -> impl IntoView {
                 </div>
                 <button
                     class="btn btn-primary"
-                    // on:click=move |_| {
-                    //     spawn_local(async {
-                    //         let _ = add_todo("So much to do!".to_string()).await;
-                    //     });
-                    // }
+                    on:click=move |_| {
+                        spawn_local(async {
+                            let _ = add_todo("So much to do!".to_string()).await;
+                        });
+                    }
                 >
                     Submit
                 </button>
@@ -38,7 +39,7 @@ pub fn Home() -> impl IntoView {
             <div class="col col-md-6">
                 <p class="translation-output-label">Translation Output:</p>
                 <div class="translation-output-box">
-                    <h3>
+                    <h4>
                         {move || {
                             if translation_input.get() == "".to_string() {
                                 "Output will go here".to_string()
@@ -46,7 +47,7 @@ pub fn Home() -> impl IntoView {
                                 translation_input.get()
                             }
                         }}
-                    </h3>
+                    </h4>
                 </div>
             </div>
         </div>
