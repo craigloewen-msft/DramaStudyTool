@@ -1,5 +1,6 @@
 pub mod app;
 pub mod context;
+mod ai_interface;
 
 #[cfg(feature = "hydrate")]
 #[wasm_bindgen::prelude::wasm_bindgen]

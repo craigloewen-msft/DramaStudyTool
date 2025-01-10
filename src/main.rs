@@ -15,7 +15,7 @@ async fn main() {
     // Generate the list of routes in your Leptos App
     let routes = generate_route_list(App);
 
-    let my_context = DramaStudyToolAppContext { my_api: String::from("Some value!!!!")};
+    let my_context = DramaStudyToolAppContext::new();
 
     let app = Router::new()
         .leptos_routes_with_context(&leptos_options, routes,

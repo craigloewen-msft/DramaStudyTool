@@ -19,6 +19,12 @@ tower-http = { version = "0.5", features = ["fs"], optional = true }
 wasm-bindgen = "=0.2.99"
 thiserror = "1"
 http = "1"
+dotenv = "0.15"
+reqwest = { version = "0.11", features = ["json"] }
+serde_json = "1.0"
+az-openai-rs = { git = "https://github.com/craigloewen-msft/az-openai-rs-silent.git" }
+anyhow = "1.0"
+serde = "1.0"
 
 [features]
 hydrate = ["leptos/hydrate"]
