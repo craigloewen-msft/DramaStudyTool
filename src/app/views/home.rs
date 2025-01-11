@@ -1,7 +1,10 @@
-use leptos::{html::A, prelude::*};
+use leptos::{ev::{Event, MouseEvent, SubmitEvent}, html::{Input, A}, logging::log, prelude::*, task::spawn_local};
 use server_fn::ServerFn;
+use wasm_bindgen::{prelude::Closure, JsCast, JsValue};
 
 use crate::ai_interface::{GrammarPointInfo, SubtitleTranslationInfo, VocabularyInfo};
+
+use web_sys::{Blob, FileReader, HtmlInputElement};
 
 #[server]
 pub async fn get_translate_info(input_text: String) -> Result<SubtitleTranslationInfo, ServerFnError> {
@@ -31,39 +34,71 @@ pub async fn get_translate_info(input_text: String) -> Result<SubtitleTranslatio
 pub fn Home() -> impl IntoView {
     let get_translate_info_action = ServerAction::<GetTranslateInfo>::new();
 
-    let (saved_word_list, set_saved_word_list) = signal(vec![(0 as usize, VocabularyInfo{ word: "Dog".to_string(), translation: "Is a dog".to_string() })]);
+    let (saved_word_list, set_saved_word_list) = signal(vec![
+        (0 as usize, VocabularyInfo{ word: "Dog".to_string(), translation: "Is a dog".to_string() }),
+        (1 as usize, VocabularyInfo{ word: "Cat".to_string(), translation: "Is a cat".to_string() }),
+    ]);
 
-    let remove_saved_word_fn = move |index: usize| { 
-        let mut saved_word_list_value = saved_word_list.get();
-        saved_word_list_value.remove(index);
-        set_saved_word_list.set(saved_word_list_value)
-     };
+    let (direct_input, direct_input_set) = signal(true);
 
     view! {
         <div class="row">
             <div class="col col-md-6">
-                <ActionForm action=get_translate_info_action>
-                    <div class="mb-3">
-                        <label for="translation_input" class="form-label">
-                            Input language text
-                        </label>
-                        <input
-                            class="form-control"
-                            type="text"
-                            placeholder="e.g: 사전을 못 찾아"
-                            name="input_text"
-                        />
-                    </div>
-                    <input type="submit" class="btn btn-primary" value="Translate" />
-                </ActionForm>
+                <ul class="nav nav-tabs">
+                    <li class="nav-item">
+                        <a
+                            class="nav-link"
+                            class:active=move || direct_input.get()
+                            on:click=move |_| { direct_input_set.set(true) }
+                            aria-current="page"
+                        >
+                            Text Input
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a
+                            class="nav-link"
+                            class:active=move || !direct_input.get()
+                            on:click=move |_| { direct_input_set.set(false) }
+                            aria-current="page"
+                        >
+                            Upload
+                        </a>
+                    </li>
+                </ul>
+                <Show
+                    when=move || direct_input.get()
+                    fallback=move || {
+                        view! { <SubtitleFileInput translate_action=get_translate_info_action /> }
+                    }
+                >
+                    <ActionForm action=get_translate_info_action>
+                        <div class="mb-3">
+                            <label for="translation_input" class="form-label">
+                                Input language text
+                            </label>
+                            <input
+                                class="form-control"
+                                type="text"
+                                placeholder="e.g: 사전을 못 찾아"
+                                name="input_text"
+                            />
+                        </div>
+                        <input type="submit" class="btn btn-primary" value="Translate" />
+                    </ActionForm>
+                </Show>
             </div>
             <div class="col col-md-6">
-                <TranslationBox translate_action=get_translate_info_action />
+                <TranslationBox
+                    translate_action=get_translate_info_action
+                    saved_word_list=saved_word_list
+                    set_saved_word_list=set_saved_word_list
+                />
             </div>
         </div>
         <div class="row">
-            <SavedWordBox saved_word_list=saved_word_list />
-            <button on:click=move |_| remove_saved_word_fn(0)>Remove</button>
+            <hr />
+            <SavedWordBox saved_word_list=saved_word_list set_saved_word_list=set_saved_word_list />
         </div>
     }
 }
@@ -78,13 +113,23 @@ fn TranslationOutputBox(message: String) -> impl IntoView {
 }
 
 #[component]
-fn TranslationBox(translate_action: ServerAction<GetTranslateInfo>) -> impl IntoView {
+fn TranslationBox(translate_action: ServerAction<GetTranslateInfo>, saved_word_list: ReadSignal<Vec<(usize, VocabularyInfo)>>, set_saved_word_list: WriteSignal<Vec<(usize,VocabularyInfo)>>) -> impl IntoView {
 
     let translation_pending = translate_action.pending();
 
     let translation_result_option = translate_action.value();
 
     let get_translation_object = move || translation_result_option.get().unwrap().unwrap();
+
+     let add_saved_word_fn = move |new_element: VocabularyInfo| { 
+        let mut saved_word_list_value = saved_word_list.get();
+        let max_index = match saved_word_list_value.last() {
+            Some((index, _)) => index + 1,
+            None => 0,
+        };
+        saved_word_list_value.push((max_index, new_element));
+        set_saved_word_list.set(saved_word_list_value)
+     };
 
     // let fake_data = SubtitleTranslationInfo {
     //     translation: "I love dogs.".to_string(),
@@ -138,11 +183,15 @@ fn TranslationBox(translate_action: ServerAction<GetTranslateInfo>) -> impl Into
                             .vocabulary
                             .into_iter()
                             .map(|vocab| {
+                                let vocab_clone = vocab.clone();
                                 view! {
                                     <li>
                                         <b>{vocab.word}</b>
                                         -
                                         {vocab.translation}
+                                        <button on:click=move |_| add_saved_word_fn(
+                                            vocab_clone.clone(),
+                                        )>Add word</button>
                                     </li>
                                 }
                             })
@@ -173,7 +222,13 @@ fn TranslationBox(translate_action: ServerAction<GetTranslateInfo>) -> impl Into
 }
 
 #[component]
-fn SavedWordBox(saved_word_list: ReadSignal<Vec<(usize, VocabularyInfo)>>) -> impl IntoView {
+fn SavedWordBox(saved_word_list: ReadSignal<Vec<(usize, VocabularyInfo)>>, set_saved_word_list: WriteSignal<Vec<(usize,VocabularyInfo)>>) -> impl IntoView { 
+ let remove_saved_word_fn = move |index: usize| { 
+        let mut saved_word_list_value = saved_word_list.get();
+        saved_word_list_value.retain(|(id,_)| { id != &index });
+        set_saved_word_list.set(saved_word_list_value)
+     };
+
     view! {
         <h4>Saved words</h4>
         <For
@@ -185,8 +240,41 @@ fn SavedWordBox(saved_word_list: ReadSignal<Vec<(usize, VocabularyInfo)>>) -> im
                         <b>{vocab.word}</b>
                         -
                         {vocab.translation}
+                        <button on:click=move |_| remove_saved_word_fn(id)>Remove</button>
                     </li>
                 }
+            }
+        />
+    }
+}
+
+async fn PrintFileContent(input: Option<HtmlInputElement>) {
+        log!("Input: {:?}", input);
+        let value = input.unwrap().files();
+        log!("files: {:?}", value);
+        let value_unwrapped = value.unwrap();
+        let get_file = value_unwrapped.get(0);
+        log!("File option: {:?}", get_file);
+        let file_text = get_file.unwrap().text();
+        log!("File text: {:?}", file_text);
+        let result = wasm_bindgen_futures::JsFuture::from(file_text).await;
+        log!("Result: {:?}", result);
+}
+
+#[component]
+fn SubtitleFileInput(translate_action: ServerAction<GetTranslateInfo>) -> impl IntoView {
+    let file_input: NodeRef<Input> = NodeRef::new();
+
+    view! {
+        <h3>File Upload</h3>
+        <input
+            type="file"
+            node_ref=file_input
+            on:change=move |e| {
+                let file_input_value = file_input.get();
+                spawn_local(async move {
+                    PrintFileContent(file_input_value).await;
+                })
             }
         />
     }

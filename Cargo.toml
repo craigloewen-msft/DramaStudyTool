@@ -25,6 +25,8 @@ serde_json = "1.0"
 az-openai-rs = { git = "https://github.com/craigloewen-msft/az-openai-rs-silent.git" }
 anyhow = "1.0"
 serde = "1.0"
+web-sys = { version = "0.3", features = ["FileList", "File"] } 
+wasm-bindgen-futures = "0.4"
 
 [features]
 hydrate = ["leptos/hydrate"]

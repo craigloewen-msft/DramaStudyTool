@@ -422,6 +422,8 @@ dependencies = [
  "tower 0.4.13",
  "tower-http 0.5.2",
  "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]
