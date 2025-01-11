@@ -1,5 +1,5 @@
 use leptos::prelude::*;
-use leptos_meta::{provide_meta_context, Link, MetaTags, Script, Stylesheet, Title};
+use leptos_meta::{provide_meta_context, Link, MetaTags, Script, Title};
 use leptos_router::{
     components::{Route, Router, Routes}, hooks::use_location,
     path,

@@ -1,10 +1,18 @@
-use leptos::{ev::{Event, MouseEvent, SubmitEvent}, html::{Input, A}, logging::log, prelude::*, task::spawn_local};
-use server_fn::ServerFn;
-use wasm_bindgen::{prelude::Closure, JsCast, JsValue};
+use leptos::{html::Input, logging::log, prelude::*, task::spawn_local};
+use leptos::ev::Event;
 
-use crate::ai_interface::{GrammarPointInfo, SubtitleTranslationInfo, VocabularyInfo};
+use crate::ai_interface::{SubtitleTranslationInfo, VocabularyInfo};
 
-use web_sys::{Blob, FileReader, HtmlInputElement};
+use web_sys::HtmlInputElement;
+
+use srtlib::Subtitles;
+
+use std::iter::Iterator;
+
+fn format_timestamp_without_ms(timestamp: &srtlib::Timestamp) -> String {
+    let timestamp_vals = timestamp.get();
+    format!("{:02}:{:02}:{:02}", timestamp_vals.0, timestamp_vals.1, timestamp_vals.2)
+}
 
 #[server]
 pub async fn get_translate_info(input_text: String) -> Result<SubtitleTranslationInfo, ServerFnError> {
@@ -248,34 +256,190 @@ fn SavedWordBox(saved_word_list: ReadSignal<Vec<(usize, VocabularyInfo)>>, set_s
     }
 }
 
-async fn PrintFileContent(input: Option<HtmlInputElement>) {
-        log!("Input: {:?}", input);
-        let value = input.unwrap().files();
-        log!("files: {:?}", value);
-        let value_unwrapped = value.unwrap();
-        let get_file = value_unwrapped.get(0);
-        log!("File option: {:?}", get_file);
-        let file_text = get_file.unwrap().text();
-        log!("File text: {:?}", file_text);
-        let result = wasm_bindgen_futures::JsFuture::from(file_text).await;
-        log!("Result: {:?}", result);
+async fn print_file_content(input: Option<HtmlInputElement>) -> Result<Subtitles, String> {
+    let files = input.ok_or("No input element found")?.files()
+        .ok_or("No files selected")?;
+    let file = files.get(0).ok_or("No file found")?;
+    let text_promise = file.text();
+    
+    let subtitle_text = wasm_bindgen_futures::JsFuture::from(text_promise).await
+        .map_err(|e| e.as_string().unwrap_or("Unknown error reading file".to_string()))
+        .and_then(|text| text.as_string().ok_or("Could not convert file content to string".to_string()))?;
+
+    Subtitles::parse_from_str(subtitle_text)
+        .map_err(|e| e.to_string())
 }
 
 #[component]
 fn SubtitleFileInput(translate_action: ServerAction<GetTranslateInfo>) -> impl IntoView {
     let file_input: NodeRef<Input> = NodeRef::new();
+    let (subtitle_content, set_subtitle_content) = signal(Subtitles::new());
+    
+    // Add current subtitle index signal
+    let (current_subtitle_idx, set_current_subtitle_idx) = signal(0usize);
+    
+    // Create computed signal for current subtitle
+    let current_subtitle = move || {
+        subtitle_content.with(|subs| {
+            subs.clone().to_vec()
+                .get(current_subtitle_idx.get())
+                .cloned()
+        })
+    };
+
+    // Navigation functions
+    let move_forward = move |step: usize| {
+        let max_idx = subtitle_content.with(|subs| subs.clone().to_vec().len().saturating_sub(1));
+        let new_idx = (current_subtitle_idx.get() + step).min(max_idx);
+        set_current_subtitle_idx.set(new_idx);
+    };
+
+    let move_backward = move |step: usize| {
+        let new_idx = current_subtitle_idx.get().saturating_sub(step);
+        set_current_subtitle_idx.set(new_idx);
+    };
+
+    // Add a new signal for the error message
+    let (timestamp_error, set_timestamp_error) = signal(Option::<String>::None);
+
+    // Update the jump_to_time function
+    let jump_to_time = move |time_str: String| {
+        // Add milliseconds to make it compatible with srtlib::Timestamp
+        let time_str_with_ms = format!("{},000", time_str);
+        
+        match srtlib::Timestamp::parse(&time_str_with_ms) {
+            Ok(parsed_time) => {
+                set_timestamp_error.set(None);
+                subtitle_content.with(|subs| {
+                    let subtitles = subs.clone().to_vec();
+                    let closest_idx = subtitles.iter()
+                        .enumerate()
+                        .min_by(|(_, a), (_, b)| {
+                            let a_after = a.start_time >= parsed_time;
+                            let b_after = b.start_time >= parsed_time;
+                            
+                            match (a_after, b_after) {
+                                (true, true) | (false, false) => a.start_time.cmp(&b.start_time),
+                                (true, false) => std::cmp::Ordering::Less,
+                                (false, true) => std::cmp::Ordering::Greater,
+                            }
+                        })
+                        .map(|(idx, _)| idx)
+                        .unwrap_or(0);
+                    
+                    set_current_subtitle_idx.set(closest_idx);
+                });
+            },
+            Err(_) => {
+                set_timestamp_error.set(Some("Invalid timestamp format. Use HH:MM:SS".to_string()));
+            }
+        }
+    };
 
     view! {
         <h3>File Upload</h3>
         <input
             type="file"
+            accept=".srt"
             node_ref=file_input
-            on:change=move |e| {
+            on:change=move |_| {
                 let file_input_value = file_input.get();
                 spawn_local(async move {
-                    PrintFileContent(file_input_value).await;
+                    match print_file_content(file_input_value).await {
+                        Ok(subtitle_output) => {
+                            log!("File content: {:?}", subtitle_output);
+                            set_subtitle_content.set(subtitle_output);
+                            // Reset index when new file is loaded
+                            set_current_subtitle_idx.set(0);
+                        },
+                        Err(e) => {
+                            log!("Error reading file: {}", e);
+                        }
+                    }
                 })
             }
         />
+
+        <div class="subtitle-navigation mt-3">
+            <div class="subtitle-text mb-3">
+                // Show placeholder text when no subtitles
+                {move || current_subtitle()
+                    .map(|sub| sub.text)
+                    .unwrap_or_else(|| "Upload a subtitle file to begin".to_string())}
+            </div>
+
+            // Add translate button here
+            <button 
+                class="btn btn-success mb-3"
+                on:click=move |_| {
+                    if let Some(subtitle) = current_subtitle() {
+                        translate_action.dispatch(GetTranslateInfo {
+                            input_text: subtitle.text
+                        });
+                    }
+                }
+                // Disable if no subtitles
+                prop:disabled=move || subtitle_content.with(|subs| subs.clone().to_vec().is_empty())
+            >
+                "Translate"
+            </button>
+
+            <div class="subtitle-timing mb-2">
+                <input
+                    type="text"
+                    class="form-control"
+                    class:is-invalid=move || timestamp_error.get().is_some()
+                    style="width: 200px"
+                    prop:value=move || current_subtitle()
+                        .map(|sub| format_timestamp_without_ms(&sub.start_time))
+                        .unwrap_or_default()
+                    on:change=move |ev| {
+                        let time_str = event_target_value(&ev);
+                        jump_to_time(time_str);
+                    }
+                    // Disable if no subtitles
+                    prop:disabled=move || subtitle_content.with(|subs| subs.clone().to_vec().is_empty())
+                />
+                <Show
+                    when=move || timestamp_error.get().is_some()
+                    fallback=|| view! {}
+                >
+                    <div class="invalid-feedback">
+                        {move || timestamp_error.get()}
+                    </div>
+                </Show>
+            </div>
+            <div class="navigation-buttons">
+                <button 
+                    class="btn btn-secondary me-2"
+                    on:click=move |_| move_backward(10)
+                    // Disable if no subtitles
+                    prop:disabled=move || subtitle_content.with(|subs| subs.clone().to_vec().is_empty())
+                >
+                    "⏪ Skip 10"
+                </button>
+                <button 
+                    class="btn btn-primary me-2"
+                    on:click=move |_| move_backward(1)
+                    prop:disabled=move || subtitle_content.with(|subs| subs.clone().to_vec().is_empty())
+                >
+                    "◀ Back"
+                </button>
+                <button 
+                    class="btn btn-primary me-2"
+                    on:click=move |_| move_forward(1)
+                    prop:disabled=move || subtitle_content.with(|subs| subs.clone().to_vec().is_empty())
+                >
+                    "Forward ▶"
+                </button>
+                <button 
+                    class="btn btn-secondary"
+                    on:click=move |_| move_forward(10)
+                    prop:disabled=move || subtitle_content.with(|subs| subs.clone().to_vec().is_empty())
+                >
+                    "Skip 10 ⏩"
+                </button>
+            </div>
+        </div>
     }
 }

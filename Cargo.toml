@@ -27,6 +27,7 @@ anyhow = "1.0"
 serde = "1.0"
 web-sys = { version = "0.3", features = ["FileList", "File"] } 
 wasm-bindgen-futures = "0.4"
+srtlib = "0.2"
 
 [features]
 hydrate = ["leptos/hydrate"]
