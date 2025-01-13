@@ -42,10 +42,7 @@ pub async fn get_translate_info(input_text: String) -> Result<SubtitleTranslatio
 pub fn Home() -> impl IntoView {
     let get_translate_info_action = ServerAction::<GetTranslateInfo>::new();
 
-    let (saved_word_list, set_saved_word_list) = signal(vec![
-        (0 as usize, VocabularyInfo{ word: "Dog".to_string(), translation: "Is a dog".to_string() }),
-        (1 as usize, VocabularyInfo{ word: "Cat".to_string(), translation: "Is a cat".to_string() }),
-    ]);
+    let (saved_word_list, set_saved_word_list) = signal(Vec::<(usize, VocabularyInfo)>::new());
 
     let (direct_input, direct_input_set) = signal(true);
 
@@ -127,8 +124,6 @@ fn TranslationBox(translate_action: ServerAction<GetTranslateInfo>, saved_word_l
 
     let translation_result_option = translate_action.value();
 
-    let get_translation_object = move || translation_result_option.get().unwrap().unwrap();
-
      let add_saved_word_fn = move |new_element: VocabularyInfo| { 
         let mut saved_word_list_value = saved_word_list.get();
         let max_index = match saved_word_list_value.last() {
@@ -148,7 +143,7 @@ fn TranslationBox(translate_action: ServerAction<GetTranslateInfo>, saved_word_l
     //         },
     //     ],
     //     grammar_points: vec![
-    //         GrammarPointInfo {
+    //         crate::ai_interface::GrammarPointInfo {
     //             name: "Verb".to_string(),
     //             relevant_text: "love".to_string(),
     //             description: "Verbing is verb".to_string(),
@@ -156,9 +151,12 @@ fn TranslationBox(translate_action: ServerAction<GetTranslateInfo>, saved_word_l
     //     ]
     // };
     // let translation_result_option = RwSignal::new(Some(Ok::<SubtitleTranslationInfo,ServerFnError>(fake_data)));
-    // // let translation_result_option = RwSignal::new(Some(Err::<SubtitleTranslationInfo,ServerFnError>(ServerFnError::new("Broken"))));
+    // let translation_result_option = RwSignal::new(Some(Err::<SubtitleTranslationInfo,ServerFnError>(ServerFnError::new("Broken"))));
 
-    
+    let get_translation_object = move || translation_result_option.get()
+                                                                                .unwrap()
+                                                                                .unwrap();
+
     view! {
         <p class="translation-output-label">Translation Output:</p>
         <Show
